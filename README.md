@@ -64,21 +64,20 @@ Limpeza de Rastros: Remoção da persistência e autodestruição do executável
 🏗️ Estrutura do Projeto
 
 GeminiC2/
-│
-├── C2_Downloads/
-├── C2_Keylogs/
-├── C2_System_Logs/
-│
-├── templates/
-│   └── index.html
-│
-├── agent.py
-├── c2_server.py
-├── decryptor.py
-├── requirements.txt
-│
-├── agents_db.json
-└── c2_operator_log.txt
+  │
+  ├── C2_Downloads/
+  ├── C2_Keylogs/
+  ├── C2_System_Logs/
+  │
+  ├── templates/
+  │   └── index.html   │
+  ├── agent.py
+  ├── c2_server.py
+  ├── decryptor.py
+  ├── requirements.txt
+  │
+  ├── agents_db.json
+  └── c2_operator_log.txt
 
 
 
