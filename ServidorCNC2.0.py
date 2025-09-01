@@ -77,7 +77,7 @@ def register_agent():
         "external_ip": data.get("external_ip", "N/A"),
         "os_name": data.get("os_name"),
         "privileges": data.get("privileges", "Desconhecido"),
-        "agent_version": data.get("agent_version", ""),
+        "agent_version": data.get("agent_version", "2.0"),
         "first_seen": datetime.now().isoformat(), "last_seen": datetime.now().isoformat()
     }
     tasks[agent_id] = []
@@ -243,3 +243,4 @@ if __name__ == '__main__':
     setup_directories()
     load_agents_from_disk()
     app.run(host='0.0.0.0', port=8000, debug=True)
+
