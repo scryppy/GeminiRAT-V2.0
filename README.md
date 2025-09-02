@@ -26,15 +26,16 @@ A plataforma permite que um operador (Red Team) execute uma variedade de ações
 ✨ Funcionalidades Principais
 
 A plataforma é dividida em um Servidor C2 com painel web e um Agente furtivo.
-Painel de Controle (C2)
-Gerenciamento de Múltiplos Agentes: Interface centralizada para visualizar e interagir com todos os agentes.
-Status em Tempo Real: Monitoramento do status (Online/Offline) e do último "heartbeat" de cada agente.
-Interface com Abas: Painel organizado para Comandos Interativos, Logs do Sistema, Keylogger e Descriptografia.
-Fila de Tarefas Visual: Acompanhamento do status de cada comando enviado (Pendente, Executando, Concluído, Erro).
-Logging de Operações: Registros detalhados de todas as ações do operador e de todos os eventos de sistema dos agentes.
-Ferramenta de Recuperação Integrada: Módulo para descriptografar arquivos afetados pelo ransomware diretamente do painel.
+**Painel de Controle (C2)**
+*Gerenciamento de Múltiplos Agentes*: Interface centralizada para visualizar e interagir com todos os agentes.
+*Status em Tempo Real*: Monitoramento do status (Online/Offline) e do último "heartbeat" de cada agente.
+*Interface com Abas*: Painel organizado para Comandos Interativos, Logs do Sistema, Keylogger e Descriptografia.
+*Fila de Tarefas Visual*: Acompanhamento do status de cada comando enviado (Pendente, Executando, Concluído, Erro).
+*Logging de Operações*: Registros detalhados de todas as ações do operador e de todos os eventos de sistema dos agentes.
+*Ferramenta de Recuperação Integrada*: Módulo para descriptografar arquivos afetados pelo ransomware diretamente do painel.
 Agente Multiplataforma (Windows & Linux)
-Coleta de Dados:
+
+**Coleta de Dados:**
 Informações do Sistema: Coleta de hostname, usuário, SO, versão, privilégios e IPs (interno e público).
 Credenciais: Extração de senhas salvas do Google Chrome.
 Cookies: Captura de cookies de sessão de múltiplos navegadores.
@@ -63,21 +64,22 @@ Limpeza de Rastros: Remoção da persistência e autodestruição do executável
 
 🏗️ Estrutura do Projeto
 
-GeminiC2/
-  │
-  ├── C2_Downloads/
-  ├── C2_Keylogs/
-  ├── C2_System_Logs/
-  │
-  ├── templates/
-  │   └── index.html   │
-  ├── agent.py
-  ├── c2_server.py
-  ├── decryptor.py
-  ├── requirements.txt
-  │
-  ├── agents_db.json
-  └── c2_operator_log.txt
+GeminiC2/ 
+        │ 
+        ├── C2_Downloads/  
+        ├── C2_Keylogs/ 
+	      ├── C2_System_Logs/ 
+      	│ 
+      	├── templates/ 
+      	│	       └── index.html 
+      	│ 
+      	├── agent.py 
+      	├── c2_server.py 
+      	├── decryptor.py 
+      	├── requirements.txt 
+	      │ 
+      	├── agents_db.json 
+      	└── c2_operator_log.txt
 
 
 
