@@ -1,4 +1,13 @@
-# GeminiRAT-V2.0
+# GeminiRAT-V2.0  
+
+![Python](https://img.shields.io/badge/Python-3.x-blue?logo=python)  
+![Status](https://img.shields.io/badge/Status-Estável-brightgreen)  
+![License](https://img.shields.io/badge/License-Educacional-important)  
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey?logo=linux&logoColor=white)  
+
+---
+
+
 **GeminiRAT by Whxami**
 
 ---
