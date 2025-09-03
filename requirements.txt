@@ -1,0 +1,7 @@
+flask
+requests
+pycryptodomex
+psutil
+Pillow
+browser-cookie3
+pynput
