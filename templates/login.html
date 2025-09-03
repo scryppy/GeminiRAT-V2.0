@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeminiRAT - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Fira+Code&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+        }
+        .login-card {
+            background-color: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(10px);
+        }
+        .gemini-gradient {
+            background: linear-gradient(90deg, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .fira-code { font-family: 'Fira Code', monospace; }
+        .login-button {
+            transition: all 0.3s ease;
+            background-image: linear-gradient(to right, #8b5cf6, #c084fc, #ec4899);
+            background-size: 200% auto;
+        }
+        .login-button:hover {
+            background-position: right center;
+            box-shadow: 0 10px 20px rgba(236, 72, 153, 0.25);
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-300 flex items-center justify-center h-screen p-4">
+    <div class="login-card border border-gray-800 rounded-2xl shadow-2xl p-8 max-w-sm w-full">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold gemini-gradient">GeminiRAT</h1>
+            <p class="text-gray-500 text-sm mt-2 fira-code">Controle de Acesso Remoto</p>
+        </div>
+
+        <form id="login-form">
+            <div class="space-y-6">
+                <div>
+                    <label for="username" class="text-sm font-medium text-gray-400">Usuário</label>
+                    <input type="text" id="username" name="username" required
+                           class="mt-1 block w-full bg-gray-900/50 border border-gray-700 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-gray-400">Senha</label>
+                    <input type="password" id="password" name="password" required
+                           class="mt-1 block w-full bg-gray-900/50 border border-gray-700 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent">
+                </div>
+            </div>
+            <div class="mt-8">
+                <button type="submit"
+                        class="w-full login-button text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline">
+                    Entrar
+                </button>
+            </div>
+            <p id="error-message" class="text-red-500 text-center text-sm mt-4 h-4"></p>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.textContent = '';
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    // O servidor gerencia a sessão, então apenas redirecionamos.
+                    window.location.href = '/';
+                } else {
+                    errorMessage.textContent = data.message || 'Credenciais inválidas.';
+                    const loginCard = document.querySelector('.login-card');
+                    loginCard.classList.add('animate-shake');
+                    setTimeout(() => loginCard.classList.remove('animate-shake'), 500);
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Erro de conexão com o servidor.';
+            }
+        });
+    </script>
+</body>
+</html>
+
