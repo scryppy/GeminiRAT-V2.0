@@ -1,4 +1,6 @@
 # GeminiRAT-V2.0  
+**GeminiRAT by Whxami**
+
 
 ![Python](https://img.shields.io/badge/Python-3.x-blue?logo=python)  
 ![Status](https://img.shields.io/badge/Status-Estável-brightgreen)  
@@ -8,9 +10,6 @@
 ---
 
 
-**GeminiRAT by Whxami**
-
----
 
 ## ⚠️ Aviso Ético e Legal
 Este projeto foi desenvolvido **exclusivamente para fins educacionais**, como parte de um Trabalho de Conclusão de Curso (TCC) em Cibersegurança.  
